@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Sentiment Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .emoji {
+            font-size: 1.2em;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+        }
+
+        .connection-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            min-width: 250px;
+        }
+
+        input[type="text"], input[type="url"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 16px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.3);
+            border-color: #4ecdc4;
+            box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+            transform: translateY(-2px);
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            background: linear-gradient(45deg, #ff5252, #26a69a);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .chat-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 500px;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .message.positive {
+            border-left-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .message.negative {
+            border-left-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .message.neutral {
+            border-left-color: #ffd93d;
+            background: rgba(255, 217, 61, 0.1);
+        }
+
+        .user {
+            font-weight: bold;
+            color: #4ecdc4;
+            margin-right: 8px;
+        }
+
+        .timestamp {
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.6);
+            float: right;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        select {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 16px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.3);
+            border-color: #4ecdc4;
+            box-shadow: 0 0 15px rgba(78, 205, 196, 0.3);
+        }
+
+        option {
+            background: #2c3e50;
+            color: #fff;
+        }
+
+        .status {
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status.connected {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+        }
+
+        .status.disconnected {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .status.connecting {
+            background: rgba(255, 217, 61, 0.3);
+            color: #ffd93d;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .no-messages {
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                padding: 10px;
+                gap: 15px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+                margin-bottom: 20px;
+            }
+            
+            .panel {
+                padding: 20px;
+            }
+            
+            .connection-form {
+                flex-direction: column;
+            }
+            
+            .input-group {
+                min-width: unset;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel: Live Chat -->
+        <div class="panel left-panel">
+            <h2><span class="emoji">💬</span> Live Chat</h2>
+            
+            <div class="connection-form">
+                <div class="input-group">
+                    <input type="url" id="apiUrl" placeholder="API URL (e.g., http://localhost:8000)" value="http://localhost:8000">
+                    <input type="text" id="channelInput" placeholder="Enter Twitch channel name">
+                    <button class="btn" onclick="connectToChannel()">Connect</button>
+                </div>
+            </div>
+
+            <div class="status disconnected" id="connectionStatus">
+                <div class="pulse"></div>
+                Disconnected
+            </div>
+
+            <div class="chat-container" id="chatContainer">
+                <div class="no-messages">
+                    Enter a channel name and click Connect to start monitoring chat sentiment!
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Sentiment Analysis -->
+        <div class="panel right-panel">
+            <h2><span class="emoji">📊</span> Sentiment Analysis</h2>
+            
+            <div class="controls">
+                <label for="messageCount" style="display: flex; align-items: center; gap: 10px;">
+                    <span>Sample Size:</span>
+                    <select id="messageCount" onchange="updateChart()">
+                        <option value="10">10 messages</option>
+                        <option value="20" selected>20 messages</option>
+                        <option value="50">50 messages</option>
+                        <option value="100">100 messages</option>
+                    </select>
+                </label>
+                
+                <div class="status" id="analysisStatus">
+                    <div class="pulse"></div>
+                    <span id="statusText">Waiting for data...</span>
+                </div>
+            </div>
+
+            <div class="stats" id="statsContainer">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalMessages">0</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgSentiment">0.0</div>
+                    <div class="stat-label">Avg Sentiment</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="positiveCount">0</div>
+                    <div class="stat-label">Positive</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="negativeCount">0</div>
+                    <div class="stat-label">Negative</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="sentimentChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart;
+        let eventSource;
+        let apiBaseUrl = 'http://localhost:8000';
+        let isConnected = false;
+        let messageHistory = [];
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Positive', 'Neutral', 'Negative'],
+                    datasets: [{
+                        label: 'Message Count',
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            'rgba(78, 205, 196, 0.7)',
+                            'rgba(255, 217, 61, 0.7)',
+                            'rgba(255, 107, 107, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(78, 205, 196, 1)',
+                            'rgba(255, 217, 61, 1)',
+                            'rgba(255, 107, 107, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.8)',
+                                precision: 0
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.8)'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 750,
+                        easing: 'easeInOutQuart'
+                    }
+                }
+            });
+        }
+
+        // Connect to channel
+        function connectToChannel() {
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const channel = document.getElementById('channelInput').value.trim();
+            
+            if (!apiUrl) {
+                alert('Please enter API URL');
+                return;
+            }
+
+            apiBaseUrl = apiUrl;
+            updateConnectionStatus('connecting', 'Connecting...');
+            
+            // Start polling for messages
+            startPolling();
+            
+            if (channel) {
+                // Note: In a real implementation, you'd send the channel to your backend
+                console.log(`Would connect to channel: ${channel}`);
+            }
+        }
+
+        // Start polling for messages
+        function startPolling() {
+            // Poll for recent messages every 2 seconds
+            setInterval(async () => {
+                if (!isConnected) return;
+                
+                try {
+                    const response = await fetch(`${apiBaseUrl}/messages/recent?n_messages=20`);
+                    if (response.ok) {
+                        const messages = await response.json();
+                        updateChatDisplay(messages);
+                        if (!isConnected) {
+                            updateConnectionStatus('connected', 'Connected');
+                            isConnected = true;
+                        }
+                    } else {
+                        throw new Error('Failed to fetch messages');
+                    }
+                } catch (error) {
+                    console.error('Error fetching messages:', error);
+                    updateConnectionStatus('disconnected', 'Connection Error');
+                    isConnected = false;
+                }
+            }, 2000);
+
+            // Poll for stats every 5 seconds
+            setInterval(async () => {
+                if (!isConnected) return;
+                
+                try {
+                    const response = await fetch(`${apiBaseUrl}/stats`);
+                    if (response.ok) {
+                        const stats = await response.json();
+                        updateStats(stats);
+                    }
+                } catch (error) {
+                    console.error('Error fetching stats:', error);
+                }
+            }, 5000);
+
+            // Try initial connection
+            fetch(`${apiBaseUrl}/`)
+                .then(response => {
+                    if (response.ok) {
+                        isConnected = true;
+                        updateConnectionStatus('connected', 'Connected');
+                    }
+                })
+                .catch(error => {
+                    updateConnectionStatus('disconnected', 'Connection Failed');
+                });
+        }
+
+        // Update connection status
+        function updateConnectionStatus(status, text) {
+            const statusElement = document.getElementById('connectionStatus');
+            const analysisStatus = document.getElementById('analysisStatus');
+            const statusText = document.getElementById('statusText');
+            
+            statusElement.className = `status ${status}`;
+            statusElement.querySelector('div + text, div').nextSibling.textContent = text;
+            
+            analysisStatus.className = `status ${status}`;
+            statusText.textContent = text;
+        }
+
+        // Update chat display
+        function updateChatDisplay(messages) {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '';
+            
+            if (!messages || messages.length === 0) {
+                chatContainer.innerHTML = '<div class="no-messages">No messages available</div>';
+                return;
+            }
+
+            // Store messages for sentiment analysis
+            messageHistory = messages.map(msg => ({
+                datetime: msg[0],
+                user: msg[1],
+                channel: msg[2],
+                message: msg[3],
+                sentiment: Math.random() > 0.5 ? 1 : -1 // Mock sentiment - replace with actual from API
+            }));
+
+            // Display messages (reverse to show newest first)
+            messages.reverse().forEach(msg => {
+                const messageDiv = document.createElement('div');
+                const sentiment = Math.random() > 0.6 ? 'positive' : Math.random() > 0.3 ? 'neutral' : 'negative';
+                
+                messageDiv.className = `message ${sentiment}`;
+                messageDiv.innerHTML = `
+                    <span class="user">${msg[1]}:</span>
+                    <span class="content">${msg[3]}</span>
+                    <span class="timestamp">${new Date(msg[0]).toLocaleTimeString()}</span>
+                `;
+                
+                chatContainer.appendChild(messageDiv);
+            });
+
+            // Update chart with message data
+            updateChart();
+        }
+
+        // Update stats
+        function updateStats(stats) {
+            if (stats && stats.length > 0) {
+                document.getElementById('totalMessages').textContent = stats[0][0] || 0;
+            }
+        }
+
+        // Update chart
+        function updateChart() {
+            if (!chart || messageHistory.length === 0) return;
+
+            const messageCount = parseInt(document.getElementById('messageCount').value);
+            const recentMessages = messageHistory.slice(-messageCount);
+            
+            let positive = 0, neutral = 0, negative = 0;
+            let sentimentSum = 0;
+
+            recentMessages.forEach(msg => {
+                if (msg.sentiment > 0.1) positive++;
+                else if (msg.sentiment < -0.1) negative++;
+                else neutral++;
+                sentimentSum += msg.sentiment;
+            });
+
+            const avgSentiment = recentMessages.length > 0 ? (sentimentSum / recentMessages.length).toFixed(2) : 0;
+
+            // Update chart
+            chart.data.datasets[0].data = [positive, neutral, negative];
+            chart.update('active');
+
+            // Update stats
+            document.getElementById('avgSentiment').textContent = avgSentiment;
+            document.getElementById('positiveCount').textContent = positive;
+            document.getElementById('negativeCount').textContent = negative;
+        }
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initChart();
+            
+            // Add enter key support for inputs
+            document.getElementById('channelInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    connectToChannel();
+                }
+            });
+            
+            document.getElementById('apiUrl').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    connectToChannel();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
