@@ -9,13 +9,10 @@ from datetime import datetime
 import threading
 import time
 import sqlite3
-
-# Import your sentiment analyzer components
 from svm import SentimentClassifier
 
 app = FastAPI(title="Twitch Sentiment Dashboard API", version="1.0.0")
 
-# Enable CORS for Svelte frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Svelte dev server
@@ -24,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database Session Logic
+
 def get_db():
     db = sqlite3.connect('messages.db',check_same_thread=False)
     try:
@@ -150,4 +147,5 @@ if __name__ == "__main__":
     )
 
 # Requirements for this API:
+
 # pip install fastapi uvicorn python-multipart
